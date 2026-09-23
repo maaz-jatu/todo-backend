@@ -1,19 +1,27 @@
 const express = require("express");
-const admin = require("firebase-admin");
+const { initializeApp, cert } = require("firebase-admin/app");
+const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const path = require("path");
+const fs = require("fs");
 
-// Load service account key from Render's secure directory
-const serviceAccountPath = path.join(__dirname, "serviceAccountKey.json");
+// Check Render's secret file location first, then fallback to local directory
+const renderSecretPath = "/etc/secrets/serviceAccountKey.json";
+const localSecretPath = path.join(__dirname, "serviceAccountKey.json");
 
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccountPath)
+const serviceAccountPath = fs.existsSync(renderSecretPath) 
+    ? renderSecretPath 
+    : localSecretPath;
+
+// Initialize Firebase Admin SDK
+initializeApp({
+    credential: cert(serviceAccountPath)
 });
 
-const db = admin.firestore();
+const db = getFirestore();
 const app = express();
 
-// Fetch credentials securely from environment variables
+// Fetch credentials securely from Render Environment Variables
 const SENDER_EMAIL = process.env.GMAIL_USER; 
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASS;
 
@@ -27,7 +35,7 @@ const transporter = nodemailer.createTransport({
 
 // Endpoint triggered every minute by Cron-Job.org
 app.get("/check-tasks", async (req, res) => {
-    const now = admin.firestore.Timestamp.now();
+    const now = Timestamp.now();
 
     try {
         const snapshot = await db.collection("tasks")
